@@ -3,12 +3,14 @@
 #include <vector>
 #include <cmath>
 
+#include "imgui.h"
+#include "imgui-SFML.h"
 
 struct Object
 {
 	sf::Color color;
 
-	float res = 1000;
+	float res = 10000;
 	float radius;
 
 	std::vector<float> position;
@@ -18,11 +20,11 @@ struct Object
 
 
 
-	Object(std::vector<float> position, std::vector<float> velocity, float mass, float radius, sf::Color color)
+	Object(float mass, std::vector<float> position, std::vector<float> velocity, float radius, sf::Color color)
 	{
+		this->mass = mass;
 		this->position = position;
 		this->velocity = velocity;
-		this->mass = mass;
 		this->radius = radius;
 		this->color = color;
 	}
@@ -81,23 +83,36 @@ void handleCollisions(Object& obj1, Object& obj2)
 	}
 }
 
-float screenWidth = 1920.0f;
-float screenHeight = 1080.0f;
+float screenWidth = 800.0f;
+float screenHeight = 600.0f;
 
 
 int main()
 {
 	sf::RenderWindow window(sf::VideoMode(sf::Vector2u(screenWidth, screenHeight)), "Simulation OpenGL3");
+	ImGui::SFML::Init(window);
 
 	// Тела
-	Object circle1(std::vector<float>{ 100.0f, 200.0f }, std::vector<float>{ 1.0f, 0.0f }, 25.0f, 100.0f, sf::Color::Red);
-	Object circle2(std::vector<float>{ 700.0f, 200.0f }, std::vector<float>{ -1.0f, 0.0f }, 50.0f, 50.0f, sf::Color::Green);
+	Object circle1(100.0f, std::vector<float>{ 100.0f, 200.0f }, std::vector<float>{ 2.0f, 0.0f }, 100.0f, sf::Color::Red);
+	Object circle2(50.0f, std::vector<float>{ 700.0f, 200.0f }, std::vector<float>{ -2.0f, 0.0f }, 50.0f, sf::Color::Green);
 
 
+	ImGui::SetNextWindowSize({ 400, 300 });
+	sf::Clock deltaClock;
 	while (window.isOpen())
 	{
-		window.clear(sf::Color::White);
+		while (const auto event = window.pollEvent())
+		{
+			ImGui::SFML::ProcessEvent(window, *event);
+			if (event->is<sf::Event::Closed>())
+			{
+				window.close();
+			}
+		}
+		ImGui::SFML::Update(window, deltaClock.restart());
 
+
+		window.clear(sf::Color::White);
 
 		circle1.updatePos();
 		circle2.updatePos();
@@ -111,7 +126,7 @@ int main()
 
 
 		// Колизии стен
-		// X
+		// 1
 		{
 			if (circle1.position[0] - circle1.radius < 0 || circle1.position[0] + circle1.radius > screenWidth)
 				circle1.velocity[0] *= -1;
@@ -119,7 +134,7 @@ int main()
 			if (circle1.position[1] - circle1.radius < 0 || circle1.position[1] + circle1.radius > screenHeight)
 				circle1.velocity[1] *= -1;
 		}
-		// Y
+		// 2
 		{
 			if (circle2.position[0] - circle2.radius < 0 || circle2.position[0] + circle2.radius > screenWidth)
 				circle2.velocity[0] *= -1;
@@ -128,16 +143,19 @@ int main()
 				circle2.velocity[1] *= -1;
 		}
 
-
-		window.display();
-
-		while (const std::optional event = window.pollEvent())
+		// ImGui Window
+		if (ImGui::Begin("Hello"))
 		{
-			if (event->is<sf::Event::Closed>())
-			{
-				window.close();
-			}
+			ImGui::Text("Text");
+
+			ImGui::End();
 		}
+
+
+		ImGui::SFML::Render(window);
+		window.display();
 	}
+
+	ImGui::SFML::Shutdown();
 }
 
