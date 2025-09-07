@@ -2,6 +2,8 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <algorithm>
+#include <iostream>
 
 #include "imgui.h"
 #include "imgui-SFML.h"
@@ -12,14 +14,12 @@ struct Object
 {
 	sf::Color color;
 
-	float res = 10000;
+	float res = 1000;
 	float radius;
 
 	std::vector<float> position;
-
 	std::vector<float> velocity;
 	float mass;
-
 
 
 	Object(float mass, std::vector<float> position, std::vector<float> velocity, float radius, sf::Color color)
@@ -29,6 +29,16 @@ struct Object
 		this->velocity = velocity;
 		this->radius = radius;
 		this->color = color;
+	}
+
+	bool operator==(const Object& obj2) const
+	{
+		return this == &obj2;
+	}
+
+	bool operator!=(const Object& obj2) const
+	{
+		return this != &obj2;
 	}
 
 	void accelerate(float x, float y)
@@ -82,29 +92,37 @@ void handleCollisions(Object& obj1, Object& obj2)
 }
 
 
-
 // settings
-float screenWidth = 800.0f;
-float screenHeight = 600.0f;
+float screenWidth = 1920.0f;
+float screenHeight = 1080.0f;
 
 sf::Color bgColor = sf::Color::Black;
-
 bool isPaused = false;
 
+float collisionSlowdown = -1.0f;
 
-// Objects
-std::vector<Object> initialObjects =
+
+// objects
+std::vector<Object> objects{};
+
+// Factory
+namespace newObject
 {
-	Object(100.0f, std::vector<float>{ screenWidth / 2.0f - 200.0f, 200.0f }, std::vector<float>{ 2.0f, 0.0f }, 100.0f, sf::Color::Red),
-	Object(50.0f, std::vector<float>{ screenWidth / 2.0f + 150.0f, 200.0f }, std::vector<float>{ -2.0f, 0.0f }, 50.0f, sf::Color::Green)
-};
+	float mass = 100.0f;
+	std::vector<float> position{ screenWidth / 2.0f, screenHeight / 2.0f };
+	std::vector<float> velocity{ 0.0f, 0.0f };
+	float radius = 100.0f;
+	sf::Color color = sf::Color::Red;
+}
 
-Object circle1 = initialObjects[0];
-Object circle2 = initialObjects[1];
+void createNewObject(Object& newObject)
+{
+	objects.push_back(newObject);
+}
 
-std::vector<Object*> objects = { &circle1, &circle2 };
 
 
+// --- MAIN ---
 int main()
 {
 	sf::RenderWindow window(sf::VideoMode(sf::Vector2u(screenWidth, screenHeight)), "Simulation");
@@ -127,35 +145,31 @@ int main()
 
 		window.clear(bgColor);
 
-		if (!isPaused)
+
+		for (auto& object : objects)
 		{
-			circle1.updatePos();
-			circle2.updatePos();
+			if (!isPaused)
+			{
+				object.updatePos();
 
-			handleCollisions(circle1, circle2);
+				for (auto& compareObject : objects)
+				{
+					if (object != compareObject)
+					{
+						handleCollisions(object, compareObject);
+					}
+				}
+			}
+			// Wall Collision
+			{
+				if (object.position[0] - object.radius < 0 || object.position[0] + object.radius > screenWidth)
+					object.velocity[0] *= collisionSlowdown;
 
-		}
-		circle1.draw(window);
-		circle2.draw(window);
+				if (object.position[1] - object.radius < 0 || object.position[1] + object.radius > screenHeight)
+					object.velocity[1] *= collisionSlowdown;
+			}
 
-
-		// Wall Collision
-		// 1
-		float collisionSlowdown = -1.0f;
-		{
-			if (circle1.position[0] - circle1.radius < 0 || circle1.position[0] + circle1.radius > screenWidth)
-				circle1.velocity[0] *= collisionSlowdown;
-
-			if (circle1.position[1] - circle1.radius < 0 || circle1.position[1] + circle1.radius > screenHeight)
-				circle1.velocity[1] *= collisionSlowdown;
-		}
-		// 2
-		{
-			if (circle2.position[0] - circle2.radius < 0 || circle2.position[0] + circle2.radius > screenWidth)
-				circle2.velocity[0] *= collisionSlowdown;
-
-			if (circle2.position[1] - circle2.radius < 0 || circle2.position[1] + circle2.radius > screenHeight)
-				circle2.velocity[1] *= collisionSlowdown;
+			object.draw(window);
 		}
 
 		// ImGui Window
@@ -169,51 +183,44 @@ int main()
 					// Objects
 					for (int i = 0; i < objects.size(); i++)
 					{
-						auto object = objects[i];
+						auto& object = objects[i];
 						ImGui::PushID(i);
 
 						ImGui::SeparatorText("Object");
 
 						// Color
-						float color[3] = { object->color.r / 255.0f, object->color.g / 255.0f, object->color.b / 255.0f };
+						float color[3] = { object.color.r / 255.0f, object.color.g / 255.0f, object.color.b / 255.0f };
 						ImGui::Text("Color");
 						ImGui::ColorEdit3("##color", color);
-						object->color.r = static_cast<int>(color[0] * 255.0f);
-						object->color.g = static_cast<int>(color[1] * 255.0f);
-						object->color.b = static_cast<int>(color[2] * 255.0f);
+						object.color.r = static_cast<int>(color[0] * 255.0f);
+						object.color.g = static_cast<int>(color[1] * 255.0f);
+						object.color.b = static_cast<int>(color[2] * 255.0f);
 
 						ImGui::Separator();
 
 						// Object Parameters
 						ImGui::Text("Object Parameters");
-						ImGui::DragFloat("Resolution", &object->res, 10.0f, 100.0f, 100000.0f, "%.0f");
-						ImGui::DragFloat("Radius", &object->radius, 1.0f, 1.0f, 200.0f);
-						ImGui::DragFloat("Mass", &object->mass, 0.1f, 1.0f, 1000.0f);
+						ImGui::DragFloat("Resolution", &object.res, 10.0f, 100.0f, 100000.0f, "%.0f");
+						ImGui::DragFloat("Radius", &object.radius, 1.0f, 1.0f, 200.0f);
+						ImGui::DragFloat("Mass", &object.mass, 0.1f, 1.0f, 1000.0f);
 
 						ImGui::Separator();
 
 						// Coordinates
 						ImGui::Text("Coordinates");
-						ImGui::DragFloat2("Position", object->position.data());
-						ImGui::DragFloat2("Velocity", object->velocity.data());
-						ImGui::Spacing();
+						ImGui::DragFloat2("Position", object.position.data());
+						ImGui::DragFloat2("Velocity", object.velocity.data());
+
+						// Buttons
+						if (ImGui::Button("Delete"))
+						{
+							objects.erase(std::find(objects.begin(), objects.end(), object));
+						}
 
 						ImGui::PopID();
 					}
 
 					// Buttons
-					if (ImGui::Button("Reset"))
-					{
-						for (int i = 0; i < objects.size(); i++)
-						{
-							objects[i]->mass = initialObjects[i].mass;
-							objects[i]->position = initialObjects[i].position;
-							objects[i]->velocity = initialObjects[i].velocity;
-							objects[i]->radius = initialObjects[i].radius;
-							objects[i]->color = initialObjects[i].color;
-						}
-					}
-					ImGui::SameLine();
 					if (ImGui::Button("Pause"))
 					{
 						isPaused = !isPaused;
@@ -222,9 +229,10 @@ int main()
 					ImGui::EndTabItem();
 				}
 
-				// Background Tab
-				if (ImGui::BeginTabItem("Background"))
+				// Global Tab
+				if (ImGui::BeginTabItem("Global"))
 				{
+					// Background
 					ImGui::SeparatorText("BackGround");
 					float color[3] = { bgColor.r / 255.0f, bgColor.g / 255.0f, bgColor.b / 255.0f };
 					ImGui::ColorEdit3("##color", color);
@@ -232,6 +240,47 @@ int main()
 					bgColor.g = static_cast<int>(color[1] * 255.0f);
 					bgColor.b = static_cast<int>(color[2] * 255.0f);
 
+					// Objects
+					ImGui::SeparatorText("Objects");
+					if (ImGui::Button("Remove all"))
+					{
+						objects.clear();
+					}
+
+					ImGui::EndTabItem();
+				}
+
+				// new Object
+				if (ImGui::BeginTabItem("create object"))
+				{
+					using namespace newObject;
+
+					// Color
+					float colorArray[3] = { color.r / 255.0f, color.g / 255.0f, color.b / 255.0f };
+					ImGui::Text("Color");
+					ImGui::ColorEdit3("##color", colorArray);
+					color.r = static_cast<int>(colorArray[0] * 255.0f);
+					color.g = static_cast<int>(colorArray[1] * 255.0f);
+					color.b = static_cast<int>(colorArray[2] * 255.0f);
+
+					// Object Parameters
+					ImGui::DragFloat("Radius", &radius, 1.0f, 1.0f, 200.0f);
+					ImGui::DragFloat("Mass", &mass, 0.1f, 1.0f, 1000.0f);
+
+					ImGui::Separator();
+
+					// Coordinates
+					ImGui::Text("Coordinates");
+					ImGui::DragFloat2("Position", position.data());
+					ImGui::DragFloat2("Velocity", velocity.data());
+					ImGui::Spacing();
+
+					if (ImGui::Button("Create new object"))
+					{
+						Object obj(mass, position, velocity, radius, color);
+
+						createNewObject(obj);
+					}
 					ImGui::EndTabItem();
 				}
 
